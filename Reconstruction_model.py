@@ -44,14 +44,14 @@ class ReconstructionModel(nn.Module):
     def forward(self, x, attn, pad_size=None, orgin_size=None):
         B, C, H, W = x.shape
         x = x.permute(0, 2, 3, 1).reshape(B, H*W, self.embed_dim)
-        y = self.downsample(x).permute(0,2,1).reshape(B, self.embed_dim, H, W)
-        # y = (x.transpose(-1,-2) @ attn).reshape(B*self.num_head,self.m, self.n ,-1, pad_size[0]//self.m, pad_size[1]//self.n).permute(0, 3, 1, 4, 2, 5).reshape(B, self.embed_dim, pad_size[0], pad_size[1])
+        x = self.downsample(x).reshape(B,self.m,H//self.m,self.n,W//self.n,self.num_head,self.embed_dim//self.num_head).permute(0,5,1,3, 2, 4,6).reshape(B*self.num_head*self.m*self.n,H*W//(self.m*self.n),self.embed_dim//self.num_head)
+        y = (x.transpose(-1,-2) @ attn).reshape(B*self.num_head,self.m, self.n ,-1, pad_size[0]//self.m, pad_size[1]//self.n).permute(0, 3, 1, 4, 2, 5).reshape(B, self.embed_dim, pad_size[0], pad_size[1])
         y = self.output_upscaling(y)
         y =  F.interpolate(
             y,
-            (orgin_size[0], orgin_size[1]),
+            (pad_size[0]*self.patch_size, pad_size[1]*self.patch_size),
             mode="bilinear",
             align_corners=False,
-        )
+        )[:,:, :orgin_size[0], :orgin_size[1]]
         y = self.out_conv(y)
         return y 
