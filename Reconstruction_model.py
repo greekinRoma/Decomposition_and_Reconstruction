@@ -29,13 +29,7 @@ class ReconstructionModel(nn.Module):
             nn.ConvTranspose2d(embed_dim, embed_dim // 4, kernel_size=2, stride=2),
             LayerNorm2d(embed_dim // 4),
             GELU(),
-            nn.ConvTranspose2d(embed_dim// 4, embed_dim// 8, kernel_size=2, stride=2),
-            LayerNorm2d(embed_dim // 8),
-            GELU(),
-            nn.ConvTranspose2d(embed_dim// 8, embed_dim// 16, kernel_size=2, stride=2),
-            LayerNorm2d(embed_dim // 16),
-            GELU(),
-            nn.Conv2d(embed_dim//16, embed_dim//16, kernel_size=1, stride=1),
+            nn.ConvTranspose2d(embed_dim//4, embed_dim // 16, kernel_size=2, stride=2),
             GELU(),
         )
         self.out_conv = nn.Sequential(*[nn.Conv2d(embed_dim//16, 3, kernel_size=1, stride=1),
@@ -47,11 +41,6 @@ class ReconstructionModel(nn.Module):
         x = self.downsample(x).reshape(B,self.m,H//self.m,self.n,W//self.n,self.num_head,self.embed_dim//self.num_head).permute(0,5,1,3, 2, 4,6).reshape(B*self.num_head*self.m*self.n,H*W//(self.m*self.n),self.embed_dim//self.num_head)
         y = (x.transpose(-1,-2) @ attn).reshape(B*self.num_head,self.m, self.n ,-1, pad_size[0]//self.m, pad_size[1]//self.n).permute(0, 3, 1, 4, 2, 5).reshape(B, self.embed_dim, pad_size[0], pad_size[1])
         y = self.output_upscaling(y)
-        y =  F.interpolate(
-            y,
-            (pad_size[0]*self.patch_size, pad_size[1]*self.patch_size),
-            mode="bilinear",
-            align_corners=False,
-        )[:,:, :orgin_size[0], :orgin_size[1]]
+        y =  y[:,:, :orgin_size[0], :orgin_size[1]]
         y = self.out_conv(y)
         return y 

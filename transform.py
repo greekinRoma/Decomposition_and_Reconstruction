@@ -17,12 +17,14 @@ def get_args():
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--train_dir', type=str, default='datasets/train', help='directory of training input images')
     parser.add_argument('--test_dir', type=str, default='datasets/test', help='directory of testing input images')
-    parser.add_argument('--patch_size', type=int, default=16, help='size of image patches')
+    parser.add_argument('--origin_patch_size', type=int, default=4, help='size of origin image patches')
+    parser.add_argument('--origin_embed_dim', type=int, default=48, help='dimension of patch embedding')
+    parser.add_argument('--resize_patch_size', type=int, default=16, help='size of resize image patches')
+    parser.add_argument('--resize_embed_dim', type=int, default=768, help='dimension of patch embedding')
     parser.add_argument('--num_head',type=int, default=8, help='number of attention heads')
-    parser.add_argument('--embed_dim', type=int, default=768, help='dimension of patch embedding')
     parser.add_argument('--model_save_dir', type=str, default='save', help='path to save the trained model')
-    parser.add_argument('--m', type=int, default=1, help='number of rows to divide the image into')
-    parser.add_argument('--n', type=int, default=1, help='number of columns to divide the image into')
+    parser.add_argument('--m', type=int, default=8, help='number of rows to divide the image into')
+    parser.add_argument('--n', type=int, default=8, help='number of columns to divide the image into')
     return parser.parse_args()
 
 def my_collate_fn(batch):
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, batch_size=args.batch_size, collate_fn=my_collate_fn)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=my_collate_fn)
     
-    scale_model = DeRemodel(patch_size=args.patch_size, num_head=args.num_head, embed_dim= args.embed_dim, m=args.m, n=args.n).cuda()
+    scale_model = DeRemodel( m=args.m, n=args.n, origin_patch_size=args.origin_patch_size, resize_patch_size=args.resize_patch_size, origin_embed_dim= args.origin_embed_dim, resize_embed_dim=args.resize_embed_dim).cuda()
     
     # 新增：定义 AdamW 优化器，将两个模型的参数组合在一起进行联合训练
     optimizer = optim.AdamW(
