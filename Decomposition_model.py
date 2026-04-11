@@ -54,10 +54,10 @@ class DecompositionModel(nn.Module):
         b = original_b.reshape(B*self.num_heads, self.m , H_pad_patch//self.m, self.n , W_pad_patch//self.n, -1).permute(0, 1, 3, 2, 4, 5).reshape(B*self.num_heads*self.m*self.n, H_pad_patch* W_pad_patch//(self.m*self.n), -1)
         q = q.reshape(B*self.num_heads, self.m, self.reszie//self.m, self.n, self.reszie//self.n, -1).permute(0, 1, 3, 2, 4, 5).reshape(B*self.num_heads*self.m*self.n, self.reszie * self.reszie//(self.m*self.n), -1)
         
-        # tmp_b = b.clone()
+        tmp_b = b.clone()
         q = torch.nn.functional.normalize(q, dim=-1)
         b = torch.nn.functional.normalize(b, dim=-1)
         attn = q  @ b.transpose(-2, -1)
-        # x = (attn @ tmp_b).reshape(B, self.num_heads, self.m, self.n, self.reszie//self.m, self.reszie//self.n, -1).permute(0, 2, 4, 3, 5, 1, 6).reshape(B, self.reszie, self.reszie, self.resize_embed_dim)
+        x = (attn @ tmp_b).reshape(B, self.num_heads, self.m, self.n, self.reszie//self.m, self.reszie//self.n, -1).permute(0, 2, 4, 3, 5, 1, 6).reshape(B, self.reszie, self.reszie, self.resize_embed_dim)
         x = self.proj(x).permute(0, 3, 1, 2)
         return x, attn, [H_pad_patch, W_pad_patch], [H, W]
