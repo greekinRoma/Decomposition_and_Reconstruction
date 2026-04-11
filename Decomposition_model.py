@@ -32,19 +32,23 @@ class DecompositionModel(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         resized_x = torch.nn.functional.interpolate(x, size=(1024, 1024), mode='bilinear', align_corners=False)
-        H_pad = self.origin_patch_size*self.m - H % (self.origin_patch_size*self.m)
-        W_pad = self.origin_patch_size*self.n - W % (self.origin_patch_size*self.n)
+        H_pad = self.origin_patch_size - H % self.origin_patch_size if H % self.origin_patch_size else 0 
+        W_pad = self.origin_patch_size - W % self.origin_patch_size if W % self.origin_patch_size else 0 
         x_pad = pad(x, (0, W_pad, 0, H_pad), mode='constant', value=0)
         B, C, H_pad, W_pad = x_pad.shape
-        H_pad_patch = H_pad // self.origin_patch_size
-        W_pad_patch = W_pad // self.origin_patch_size
+        H_patch = H_pad // self.origin_patch_size
+        W_patch = W_pad // self.origin_patch_size 
+
+        H_patch_pad = self.m - H_patch % self.m if H_patch % self.m else 0
+        W_patch_pad = self.n - W_patch % self.n if W_patch % self.n else 0
+        H_pad_patch = H_patch + H_patch_pad
+        W_pad_patch = W_patch + W_patch_pad
         
         x = (self.resize_patch_embed(resized_x) + self.pos_embed).permute(0,2,3,1)
         resized_patches = x.reshape(B, self.reszie * self.reszie, self.resize_embed_dim)
 
-        original_patches = self.original_patch_embed(x_pad).permute(0,2,3,1).reshape(B, H_pad_patch* W_pad_patch, self.origin_embed_dim)
-        # print(resized_patches.shape)
-        # print(original_patches.shape)
+        original_patches = self.original_patch_embed(x_pad)
+        original_patches = pad(original_patches,(0,W_patch_pad,0,H_patch_pad),mode='constant',value=0).permute(0,2,3,1).reshape(B, H_pad_patch* W_pad_patch, self.origin_embed_dim)
         resized_patches = self.norm_q(resized_patches)
         original_patches = self.norm_b(original_patches)
 
