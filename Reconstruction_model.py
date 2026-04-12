@@ -29,16 +29,16 @@ class ReconstructionModel(nn.Module):
             nn.ConvTranspose2d(embed_dim, embed_dim // 4, kernel_size=2, stride=2),
             LayerNorm2d(embed_dim // 4),
             GELU(),
-            nn.ConvTranspose2d(embed_dim//4, embed_dim // 8, kernel_size=2, stride=2),
-            LayerNorm2d(embed_dim // 8),
-            GELU(),
-            nn.ConvTranspose2d(embed_dim//8, embed_dim // 16, kernel_size=2, stride=2),
+            nn.ConvTranspose2d(embed_dim//4, embed_dim // 16, kernel_size=2, stride=2),
             LayerNorm2d(embed_dim // 16),
             GELU(),
-            nn.ConvTranspose2d(embed_dim//16, embed_dim // 32, kernel_size=2, stride=2),
+            nn.ConvTranspose2d(embed_dim//16, embed_dim // 64, kernel_size=2, stride=2),
+            LayerNorm2d(embed_dim // 64),
+            GELU(),
+            nn.ConvTranspose2d(embed_dim//64, embed_dim // 256, kernel_size=2, stride=2),
             GELU(),
         )
-        self.out_conv = nn.Sequential(*[nn.Conv2d(embed_dim//32, 3, kernel_size=1, stride=1),
+        self.out_conv = nn.Sequential(*[nn.Conv2d(embed_dim//256, 3, kernel_size=1, stride=1),
                                         nn.Sigmoid()])
         
     def forward(self, x, attn, pad_size=None, orgin_size=None):
