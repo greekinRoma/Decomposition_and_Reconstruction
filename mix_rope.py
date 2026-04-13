@@ -11,6 +11,8 @@ class rope():
             head_dim=self.head_dim, num_heads=self.num_heads, theta=rope_theta
         )
         self.rope_freqs = nn.Parameter(freqs, requires_grad=True).cuda()
+        self.q_scale = nn.Parameter(torch.ones(1,1,head_dim//2),requires_grad=True).cuda()
+        self.b_scale = nn.Parameter(torch.ones(1,1,head_dim//2),requires_grad=True).cuda()
         # print(self.rope_freqs.shape)
         # print(self.num_heads)
         # print(self.head_dim)
@@ -69,15 +71,14 @@ class rope():
         xk_out = torch.view_as_real(xk_ * xk_freqs_cis).flatten(3)
         return xq_out.type_as(xq).to(xq.device), xk_out.type_as(xk).to(xk.device)
     
-    def compute_cis(self, freqs: torch.Tensor, t_x: torch.Tensor, t_y: torch.Tensor):
+    def compute_cis(self, freqs: torch.Tensor, t_x: torch.Tensor, t_y: torch.Tensor, scale: torch.Tensor):
         N = t_x.shape[0]
         # print(freqs.shape)
         with torch.cuda.amp.autocast(enabled=False):
             freqs_x = (t_x.unsqueeze(-1) @ freqs[0].unsqueeze(-2))
             freqs_y = (t_y.unsqueeze(-1) @ freqs[1].unsqueeze(-2))
-            freqs = torch.concat([torch.cos(freqs_x), torch.cos(freqs_y), torch.sin(freqs_x), torch.sin(freqs_y),], dim=-1)
-            # freqs_cis =
-            
+            scale_1, scale_2 = torch.chunk(scale,dim=-1,chunks=2)
+            freqs = torch.concat([torch.cos(freqs_x)*scale_1, torch.cos(freqs_y)*scale_2, torch.sin(freqs_x)*scale_1, torch.sin(freqs_y)*scale_2], dim=-1)            
         return freqs
     
     def multiply(self, q, b, end_x_xq, end_y_xq, end_x_xb, end_y_xb):        
@@ -101,8 +102,8 @@ class rope():
         t_x_xq = t_x_xq / end_x_xq * end_x_xb
         t_y_xq = t_y_xq / end_y_xq * end_y_xb
 
-        xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq).cuda()
-        xk_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb).cuda()
+        xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq, self.q_scale).cuda()
+        xk_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb, self.b_scale).cuda()
         return xq_freqs_cls, xk_freqs_cls
 
 
