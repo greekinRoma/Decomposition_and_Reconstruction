@@ -60,11 +60,10 @@ class multiply_matrix_with_rope():
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
         xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-        xq_freqs_cis = self.reshape_for_broadcast(xq_freqs_cis, xq_).to(xq.device)
+        # xq_freqs_cis = self.reshape_for_broadcast(xq_freqs_cis, xq_).to(xq.device)
         xk_freqs_cis = self.reshape_for_broadcast(xk_freqs_cis, xk_).to(xk.device)
-        xq_out = torch.view_as_real(xq_ * xq_freqs_cis).flatten(3)
         xk_out = torch.view_as_real(xk_ * xk_freqs_cis).flatten(3)
-        return xq_out.type_as(xq).to(xq.device), xk_out.type_as(xk).to(xk.device)
+        return xq, xk_out.type_as(xk).to(xk.device)
     
     def compute_cis(self, freqs: torch.Tensor, t_x: torch.Tensor, t_y: torch.Tensor):
         N = t_x.shape[0]
@@ -78,14 +77,8 @@ class multiply_matrix_with_rope():
     
     def multiply(self, q, b, end_x_xq, end_y_xq, end_x_xb, end_y_xb):        
         t_x_xb, t_y_xb = self.init_t_xy(end_x_xb, end_y_xb)
-        t_x_xq, t_y_xq = self.init_t_xy(end_x_xq, end_y_xq)
-
-        t_x_xq = t_x_xq / end_x_xq * end_x_xb
-        t_y_xq = t_y_xq / end_y_xq * end_y_xb
-
-        xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq)
         xk_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb)
-        xq, xb = self.apply_rotary_emb(q, b, xq_freqs_cls, xk_freqs_cls)
+        xq, xb = self.apply_rotary_emb(q, b, None, xk_freqs_cls)
 
         attn = xq  @ xb.transpose(-2, -1)
         return attn
