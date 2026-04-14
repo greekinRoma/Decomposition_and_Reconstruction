@@ -1,7 +1,7 @@
 import torch
 from typing import Tuple
 from torch import nn
-class rope():
+class multiply_matrix_with_rope():
     def __init__(self, head_dim, num_heads, rope_theta):
         super().__init__()
         self.head_dim = head_dim
@@ -11,11 +11,6 @@ class rope():
             head_dim=self.head_dim, num_heads=self.num_heads, theta=rope_theta
         )
         self.rope_freqs = nn.Parameter(freqs, requires_grad=True).cuda()
-        self.q_scale = nn.Parameter(torch.ones(1,1,head_dim//2),requires_grad=True).cuda()
-        self.b_scale = nn.Parameter(torch.ones(1,1,head_dim//2),requires_grad=True).cuda()
-        # print(self.rope_freqs.shape)
-        # print(self.num_heads)
-        # print(self.head_dim)
     
     def init_random_2d_freqs(self, head_dim: int, num_heads: int, theta: float = 10.0):
         freqs_x = []
@@ -71,15 +66,15 @@ class rope():
         xk_out = torch.view_as_real(xk_ * xk_freqs_cis).flatten(3)
         return xq_out.type_as(xq).to(xq.device), xk_out.type_as(xk).to(xk.device)
     
-    def compute_cis(self, freqs: torch.Tensor, t_x: torch.Tensor, t_y: torch.Tensor, scale: torch.Tensor):
+    def compute_cis(self, freqs: torch.Tensor, t_x: torch.Tensor, t_y: torch.Tensor):
         N = t_x.shape[0]
-        # print(freqs.shape)
         with torch.cuda.amp.autocast(enabled=False):
             freqs_x = (t_x.unsqueeze(-1) @ freqs[0].unsqueeze(-2))
             freqs_y = (t_y.unsqueeze(-1) @ freqs[1].unsqueeze(-2))
-            scale_1, scale_2 = torch.chunk(scale,dim=-1,chunks=2)
-            freqs = torch.concat([torch.cos(freqs_x)*scale_1, torch.cos(freqs_y)*scale_2, torch.sin(freqs_x)*scale_1, torch.sin(freqs_y)*scale_2], dim=-1)            
-        return freqs
+            freqs = torch.concat([freqs_x,freqs_y],dim=-1)
+            freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
+            
+        return freqs_cis
     
     def multiply(self, q, b, end_x_xq, end_y_xq, end_x_xb, end_y_xb):        
         t_x_xb, t_y_xb = self.init_t_xy(end_x_xb, end_y_xb)
@@ -90,21 +85,9 @@ class rope():
 
         xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq)
         xk_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb)
-        xq, xb = self.apply_rotary_emb(q[...,:self.head_dim], b[...,:self.head_dim], xq_freqs_cls, xk_freqs_cls)
+        xq, xb = self.apply_rotary_emb(q, b, xq_freqs_cls, xk_freqs_cls)
 
-        attn = xq  @ xb.transpose(-2, -1) + q[...,self.head_dim:]@b[...,self.head_dim:].transpose(-2,-1)
+        attn = xq  @ xb.transpose(-2, -1)
         return attn
-    
-    def compute_rope(self, end_x_xq, end_y_xq, end_x_xb, end_y_xb):
-        t_x_xb, t_y_xb = self.init_t_xy(end_x_xb, end_y_xb)
-        t_x_xq, t_y_xq = self.init_t_xy(end_x_xq, end_y_xq)
-
-        t_x_xq = t_x_xq / end_x_xq * end_x_xb
-        t_y_xq = t_y_xq / end_y_xq * end_y_xb
-
-        xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq, self.q_scale).cuda()
-        xk_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb, self.b_scale).cuda()
-        return xq_freqs_cls, xk_freqs_cls
-
 
 
