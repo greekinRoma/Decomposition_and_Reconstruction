@@ -34,16 +34,17 @@ class DecompositionModel(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        resize_x = torch.nn.functional.interpolate(x, size=(1024, 1024), mode='bilinear', align_corners=False)
+        
         H_pad = (self.origin_patch_size - H % self.origin_patch_size) % self.origin_patch_size
         W_pad = (self.origin_patch_size - W % self.origin_patch_size) % self.origin_patch_size
         x_pad = pad(x, (0, W_pad, 0, H_pad), mode='constant', value=0)
 
         origin_patches = self.original_patch_embed(x_pad).permute(0,2,3,1)
-        resize_patches = (self.resize_patch_embed(resize_x)).permute(0,2,3,1)
+        origin_patches, [oh, ow], [h_pad, w_pad] = window_partition(origin_patches, m=self.m, n=self.n)
 
-        origin_patches, [oh, ow] = window_partition(origin_patches, m=self.m, n=self.n)
-        resize_patches, [rh, rw] = window_partition(resize_patches, m=self.m, n=self.n)
+        resize_x = torch.nn.functional.interpolate(pad(x, (0, self.origin_patch_size*w_pad, 0, self.origin_patch_size*h_pad), mode='constant', value=0), size=(1024, 1024), mode='bilinear', align_corners=False)
+        resize_patches = (self.resize_patch_embed(resize_x)).permute(0,2,3,1)
+        resize_patches, [rh, rw], _ = window_partition(resize_patches, m=self.m, n=self.n)
 
         origin_patches = self.norm_b(origin_patches)
         resize_patches = self.norm_q(resize_patches + self.pos_embed)

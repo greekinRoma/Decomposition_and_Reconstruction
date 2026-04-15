@@ -22,7 +22,7 @@ def window_partition(x: torch.Tensor, m: int, n:int) -> Tuple[torch.Tensor, Tupl
 
     x = x.view(B, m, Hp//m,  n, Wp // n, C)
     windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, Hp//m, Wp//n, C)
-    return windows, (Hp//m , Wp//n)
+    return windows, (Hp//m , Wp//n), (pad_h, pad_w)
 
 
 def window_unpartition(
