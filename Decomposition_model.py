@@ -17,14 +17,14 @@ class DecompositionModel(nn.Module):
         self.origin_patch_size = origin_patch_size
         self.m = m
         self.n = n
-        self.num_heads = num_head
         self.original_patch_embed = nn.Conv2d(in_channels=3,out_channels=self.origin_embed_dim,kernel_size=self.origin_patch_size,stride=self.origin_patch_size,groups=3).cuda()
         self.resize_patch_embed = nn.Conv2d(in_channels=3,out_channels=self.resize_embed_dim,kernel_size=self.resize_patch_size,stride=self.resize_patch_size,groups=3).cuda()
         self.b = nn.Linear(self.origin_embed_dim, self.origin_embed_dim)
         self.q  = nn.Linear(self.resize_embed_dim, self.resize_embed_dim)
-        self.pos_embed = nn.Parameter(torch.zeros(1, 1024 // self.resize_patch_size//self.m , 1024 // self.resize_patch_size//self.n, self.resize_embed_dim),requires_grad=True)
+        self.pos_embed = nn.Parameter(torch.rand(1, self.resize_embed_dim, 1024 // self.resize_patch_size, 1024 // self.resize_patch_size),requires_grad=True)
         self.norm_b = nn.LayerNorm(self.origin_embed_dim)
         self.norm_q = nn.LayerNorm(self.resize_embed_dim)
+        self.num_heads = num_head
         self.reszie = 1024 // self.resize_patch_size
         self.down = nn.Sequential(
             nn.Linear(self.resize_embed_dim//self.num_heads, self.origin_embed_dim//self.num_heads)
@@ -34,20 +34,19 @@ class DecompositionModel(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        
+        resize_x = torch.nn.functional.interpolate(x, size=(1024, 1024), mode='bilinear', align_corners=False)
         H_pad = (self.origin_patch_size - H % self.origin_patch_size) % self.origin_patch_size
         W_pad = (self.origin_patch_size - W % self.origin_patch_size) % self.origin_patch_size
         x_pad = pad(x, (0, W_pad, 0, H_pad), mode='constant', value=0)
 
         origin_patches = self.original_patch_embed(x_pad).permute(0,2,3,1)
-        origin_patches, [oh, ow], [h_pad, w_pad] = window_partition(origin_patches, m=self.m, n=self.n)
+        resize_patches = (self.resize_patch_embed(resize_x)+ self.pos_embed).permute(0,2,3,1)
 
-        resize_x = torch.nn.functional.interpolate(pad(x, (0, self.origin_patch_size*w_pad, 0, self.origin_patch_size*h_pad), mode='constant', value=0), size=(1024, 1024), mode='bilinear', align_corners=False)
-        resize_patches = (self.resize_patch_embed(resize_x)).permute(0,2,3,1)
-        resize_patches, [rh, rw], _ = window_partition(resize_patches, m=self.m, n=self.n)
+        origin_patches, [oh, ow] = window_partition(origin_patches, m=self.m, n=self.n)
+        resize_patches, [rh, rw] = window_partition(resize_patches, m=self.m, n=self.n)
 
         origin_patches = self.norm_b(origin_patches)
-        resize_patches = self.norm_q(resize_patches + self.pos_embed)
+        resize_patches = self.norm_q(resize_patches)
 
         q = self.q(resize_patches)
         b = self.b(origin_patches)

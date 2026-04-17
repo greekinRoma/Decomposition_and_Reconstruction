@@ -36,7 +36,6 @@ class ReconstructionModel(nn.Module):
             LayerNorm2d(embed_dim // 16),
             GELU(),
             nn.ConvTranspose2d(embed_dim//16, embed_dim // 32, kernel_size=2, stride=2),
-            LayerNorm2d(embed_dim // 32),
             GELU(),
         )
         self.out_conv = nn.Sequential(*[nn.Conv2d(embed_dim//32, 3, kernel_size=1, stride=1),
