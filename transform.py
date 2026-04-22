@@ -21,7 +21,7 @@ def get_args():
     parser.add_argument('--origin_embed_dim', type=int, default=768, help='dimension of patch embedding')
     parser.add_argument('--resize_patch_size', type=int, default=16, help='size of resize image patches')
     parser.add_argument('--resize_embed_dim', type=int, default=768, help='dimension of patch embedding')
-    parser.add_argument('--num_head',type=int, default=2, help='number of attention heads')
+    parser.add_argument('--num_head',type=int, default=1, help='number of attention heads')
     parser.add_argument('--model_save_dir', type=str, default='save', help='path to save the trained model')
     parser.add_argument('--m', type=int, default=256, help='number of rows to divide the image into')
     parser.add_argument('--n', type=int, default=256, help='number of columns to divide the image into')

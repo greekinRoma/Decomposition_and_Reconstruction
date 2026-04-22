@@ -9,18 +9,18 @@ class MultiplyMatrixWithRoPE(nn.Module):
         self.head_dim = head_dim
         self.num_heads = num_heads
         self.rope_theta = rope_theta
+        print(head_dim)
         
         freqs = self.init_random_2d_freqs(head_dim, num_heads, rope_theta)
         # 关键修复2：移除 .cuda()，交由模型统一管理设备
         self.rope_freqs = nn.Parameter(freqs, requires_grad=True)
-        self.weight = nn.Parameter(torch.rand(1,self.num_heads,1,1),requires_grad=True).cuda()
+        self.weight = nn.Parameter(torch.rand(1,self.num_heads,1,1),requires_grad=True)
         
         # 关键修复3：删除了未使用的 weight_delta, bias, scales, weight 避免 DDP 报错
 
     def init_random_2d_freqs(self, head_dim: int, num_heads: int, theta: float):
         # 关键修复4：完全向量化，消灭 for 循环
-        # print("head_dim",head_dim)
-        # print(torch.arange(0, head_dim, 8))
+        
         mag = 1 / (theta ** (torch.arange(0, head_dim, 8)[: (head_dim // 8)].float() / head_dim))
         
         # 直接生成形状为 [num_heads, 1] 的随机角度
@@ -50,7 +50,7 @@ class MultiplyMatrixWithRoPE(nn.Module):
         t = torch.arange(end_x * end_y, dtype=torch.float32, device=device)
         t_x = (t % end_x)
         t_y = torch.div(t, end_x, rounding_mode='floor')
-        return t_x.cuda(), t_y.cuda()
+        return t_x, t_y
     
     def apply_rotary_emb(
         self, xq: torch.Tensor, xk: torch.Tensor, xq_freqs_cis: torch.Tensor, xk_freqs_cis: torch.Tensor
@@ -76,7 +76,7 @@ class MultiplyMatrixWithRoPE(nn.Module):
             freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
         return freqs_cis
     
-    def add_rope(self, q: torch.Tensor, b: torch.Tensor, end_x_xq: int, end_y_xq: int, end_x_xb: int, end_y_xb: int, m:int, n:int):        
+    def multiply(self, q: torch.Tensor, b: torch.Tensor, end_x_xq: int, end_y_xq: int, end_x_xb: int, end_y_xb: int):        
         device = q.device # 获取当前张量的设备
         
         t_x_xb, t_y_xb = self.init_t_xy(end_x_xb, end_y_xb, device)
@@ -85,19 +85,10 @@ class MultiplyMatrixWithRoPE(nn.Module):
         # 保持你正确修改的插值逻辑
         t_x_xb = torch.floor((t_x_xb + 0.5) / end_x_xb * end_x_xq - 0.5)
         t_y_xb = torch.floor((t_y_xb + 0.5) / end_y_xb * end_y_xq - 0.5)
-        # print(self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb).shape)
-        xb_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb).reshape(end_x_xb,end_y_xb,self.head_dim//2)
-        xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq).reshape(end_x_xq,end_y_xq,self.head_dim//2)
-        # print("cis",xb_freqs_cls.shape)
-        xq, xb = self.apply_rotary_emb(q, b, xq_freqs_cls, xb_freqs_cls)
-        t_x_xb = t_x_xb.reshape(m,end_x_xb//m,n,end_y_xb//n).permute(0,2,1,3).reshape(m*n,1,1,end_x_xb//m*end_y_xb//n)
-        t_y_xb = t_y_xb.reshape(m,end_x_xb//m,n,end_y_xb//n).permute(0,2,1,3).reshape(m*n,1,1,end_x_xb//m*end_y_xb//n)
-        t_x_xq = t_x_xq.reshape(m,end_x_xq//m,n,end_y_xq//n).permute(0,2,1,3).reshape(m*n,1,end_x_xq//m*end_y_xq//n,1)
-        t_y_xq = t_y_xq.reshape(m,end_x_xq//m,n,end_y_xq//n).permute(0,2,1,3).reshape(m*n,1,end_x_xq//m*end_y_xq//n,1)
-        delta = torch.exp(-torch.sqrt((t_x_xb - t_x_xq)**2 + (t_y_xb - t_y_xq)**2)*torch.nn.functional.leaky_relu(self.weight))
-        return xq, xb, delta
-        # print(xq_freqs_cls.shape)
-        # print(xk_freqs_cls.shape)
-        # 
-        # attn = q @ b.transpose(-2, -1)*delta
-        # return attn
+        
+        # xk_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xb, t_y_xb)
+        # xq_freqs_cls = self.compute_cis(self.rope_freqs, t_x_xq, t_y_xq)
+        delta = torch.exp(-torch.sqrt((t_x_xb.unsqueeze(0) - t_x_xq.unsqueeze(-1))**2 + (t_y_xb.unsqueeze(0) - t_y_xq.unsqueeze(-1))**2).unsqueeze(0).unsqueeze(0)*torch.nn.functional.leaky_relu(self.weight))
+        # xq, xb = self.apply_rotary_emb(q, b, xq_freqs_cls, xk_freqs_cls)
+        attn = q @ b.transpose(-2, -1)*delta
+        return attn

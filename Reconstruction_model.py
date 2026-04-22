@@ -2,7 +2,7 @@ from torch import nn
 from torch.nn import LayerNorm,GELU
 import torch
 import torch.nn.functional as F
-from partition import window_partition
+from partition import window_partition,window_reverse
 class LayerNorm2d(nn.Module):
     def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
         super().__init__()
@@ -42,15 +42,19 @@ class ReconstructionModel(nn.Module):
         self.out_conv = nn.Sequential(*[nn.Conv2d(embed_dim//64, 3, kernel_size=1, stride=1),
                                         nn.Sigmoid()])
         
-    def forward(self, x, attn, pad_size=None, orgin_size=None):
+    def forward(self, x, attn, origin_win=None, origin_shape=None):
+        '''
+        size_t [B,self.m,self.n,H,W]
+        '''
         B, C, H, W = x.shape
         x = self.downsample(x)
-        y = self.output_upscaling(x).permute(0,2,3,1)
-        y = window_partition(y,self.m,self.n,num_heads=self.num_head).permute(0,1,3,2)
-        # print(y.shape)
+        y = self.output_upscaling(x)
+        y, _, _ = window_partition(y,self.m,self.n)
+        y = y.reshape(B*self.m*self.n,self.num_head,self.embed_dim//self.num_head//64,-1)
         y = y @ attn
-        # rx_win = rx_win.reshape(B*self.m*self.n,self.num_heads,self.resize_embed_dim//self.num_heads//self.ratio,-1)
-        y = y.reshape(B,self.m,self.n,self.num_head,self.embed_dim//64//self.num_head,pad_size[0]//self.m,pad_size[1]//self.n).permute(0,3,4,1,5,2,6).reshape(B,self.embed_dim//64,pad_size[0],pad_size[1])
-        y =  y[:,:, :orgin_size[0], :orgin_size[1]]
-        y = self.out_conv(y)
+        y = y.reshape(B*self.m*self.n,self.embed_dim//64,origin_shape[0]//self.m,origin_shape[1]//self.n)
+        y = window_reverse(windows=y,m=self.m,n=self.n,paged_shape=origin_shape)
+        # print(y[:,:,:origin_win[0],:origin_win[1]].shape)
+        # print(origin_win)
+        y = self.out_conv(y[:,:,:origin_win[0],:origin_win[1]])
         return y 

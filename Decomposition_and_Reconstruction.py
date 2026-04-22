@@ -14,5 +14,5 @@ class DeRemodel(nn.Module):
         patch, attn, pad_size, orgin_size = self.decomposition_model(x)
         return patch, attn, pad_size, orgin_size
     def decode(self, patch, attn, pad_size, orgin_size):
-        re_img = self.reconstruction_model(x=patch, attn=attn, pad_size=pad_size, orgin_size=orgin_size)
+        re_img = self.reconstruction_model(x=patch, attn=attn, origin_win=pad_size, origin_shape=orgin_size)
         return re_img
