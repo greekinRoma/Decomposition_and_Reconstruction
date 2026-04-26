@@ -13,7 +13,8 @@ from dataset import DroneDataset
 def get_args():
     parser = argparse.ArgumentParser(description="Road Segmentation Training")
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
-    parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
+    parser.add_argument('--train_batch_size', type=int, default=4, help='input batch size')
+    parser.add_argument('--val_batch_size', type=int, default=1, help='input batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--train_dir', type=str, default='datasets/train', help='directory of training input images')
     parser.add_argument('--test_dir', type=str, default='datasets/test', help='directory of testing input images')
@@ -64,8 +65,8 @@ if __name__ == "__main__":
     args = get_args()
     dataset = IRSTDataset(image_dir=args.train_dir)
     val_dataset = DroneDataset(image_dir=args.test_dir)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, collate_fn=my_collate_fn)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=my_collate_fn)
+    dataloader = DataLoader(dataset, batch_size=args.train_batch_size, collate_fn=my_collate_fn)
+    val_dataloader = DataLoader(val_dataset, batch_size=args.val_batch_size, collate_fn=my_collate_fn)
     
     scale_model = DeRemodel( num_head=args.num_head, m=args.m, n=args.n, origin_patch_size=args.origin_patch_size, resize_patch_size=args.resize_patch_size, origin_embed_dim= args.origin_embed_dim, resize_embed_dim=args.resize_embed_dim).cuda()
     
